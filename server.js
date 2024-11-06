@@ -130,7 +130,7 @@ const agendarTarde = schedule.scheduleJob('00 18 * * *', function() {
 });
 console.log("Agendado para as 18:00");
 
-const agendarNoite = schedule.scheduleJob('48 21 * * *', function() {
+const agendarNoite = schedule.scheduleJob('45 21 * * *', function() {
     checkAtendimentos();
 });
 console.log("Agendado para as 21:45");
