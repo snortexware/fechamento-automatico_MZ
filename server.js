@@ -1,136 +1,193 @@
-const { Builder, By, until } = require('selenium-webdriver');
-const chrome = require('selenium-webdriver/chrome');
-const schedule = require('node-schedule');
+const { Builder, By, until } = require("selenium-webdriver");
+const chrome = require("selenium-webdriver/chrome");
+const schedule = require("node-schedule");
 
-// Configure Chrome options
 const chromeOptions = new chrome.Options()
-.addArguments('--headless=old')
-.addArguments('--disable-gpu')
-.addArguments('--window-size=1366,768')
-
-    
+  .addArguments("--headless=old")
+  .addArguments("--disable-gpu")
+  .addArguments("--window-size=1366,768");
 
 async function checkAtendimentos() {
-    let driver = await new Builder()
-        .forBrowser('chrome')
-        .setChromeOptions(chromeOptions)
-        .build();
+  let driver = await new Builder()
+    .forBrowser("chrome")
+    .setChromeOptions(chromeOptions)
+    .build();
 
-    try {
-      
-        await driver.get('https://megazap.chat/login.html');
-        console.log("Navigated to login page.");
+  try {
+    await driver.get("https://megazap.chat/login.html");
+    console.log("Navigated to login page.");
 
-        
-        await driver.findElement(By.id('email')).sendKeys('lucas.gramnet');
-        await driver.findElement(By.id('password')).sendKeys('Lucas.moreira2');
-        await driver.findElement(By.css('.btn.btn-lg.btn-block.m-t-20.bgm-black.waves-effect.ng-binding')).click();
-        console.log("Login attempt made.");
+    await driver.findElement(By.id("email")).sendKeys("x");
+    await driver.findElement(By.id("password")).sendKeys("x");
+    await driver
+      .findElement(
+        By.css(".btn.btn-lg.btn-block.m-t-20.bgm-black.waves-effect.ng-binding")
+      )
+      .click();
+    console.log("Login attempt made.");
 
-        
-        await driver.wait(until.urlContains('https://megazap.chat/index.html#/atendimentos/chat'), 10000);
-        console.log("Login successful!");
+    await driver.wait(
+      until.urlContains("https://megazap.chat/index.html#/atendimentos/chat"),
+      10000
+    );
+    console.log("Login successful!");
 
-        
-        let closeButton = await driver.wait(
-            until.elementLocated(By.css('[ng-click="close()"]')),
-            5000
+    let closeButton = await driver.wait(
+      until.elementLocated(By.css('[ng-click="close()"]')),
+      5000
+    );
+    await closeButton.click();
+    console.log("Closed any modal.");
+
+    let parentDiv = await driver.findElement(By.id("atendimentos-ativos"));
+    let activeItems = await parentDiv.findElements(By.css('div[id^="ativo-"]'));
+    console.log(`Found ${activeItems.length} active attendances.`);
+
+    for (let item of activeItems) {
+      let itemId = await item.getAttribute("id");
+      console.log(`Processing item with ID: ${itemId}`);
+
+      await driver.executeScript("arguments[0].scrollIntoView(true);", item);
+      await driver.sleep(1000);
+      await driver.executeScript("arguments[0].click();", item);
+      await driver.sleep(1000);
+      let atendimentoContent = await item.findElement(
+        By.css(".atendimento-item-content")
+      );
+      let tagsContainerExists = await atendimentoContent.findElements(
+        By.css(".tags-container.ng-scope")
+      );
+
+      if (tagsContainerExists.length > 0) {
+        console.log(`tags-container found inside item ${itemId}`);
+
+        let tags = await atendimentoContent.findElements(
+          By.css(".item-tag.ng-binding.ng-scope")
         );
-        await closeButton.click();
-        console.log("Closed any modal.");
+        for (let tag of tags) {
+          let tagText = await tag.getText();
+          tagText = tagText.trim();
 
-        
-        let parentDiv = await driver.findElement(By.id('atendimentos-ativos'));
-        let activeItems = await parentDiv.findElements(By.css('div[id^="ativo-"]'));
-        console.log(`Found ${activeItems.length} active attendances.`);
+          const tagMap = {
+            "1 PORTAS": "7789",
+            "2 OUTRO SETOR": "7688",
+            "3 ATRASO PGT": "8000",
+            "4 ENVIO BOLETOS": "7654",
+            "5 MUDANÇA DE SENHA": "7652",
+            "6 PROBLEMA FORNECIMENTO": "7656",
+            "7 PROBLEMAS COM WIFI": "7655",
+            "8 PROBLEMAS EXTERNOS ROTAS/APPS": "7794",
+            "9 SEM CONEXÃO": "7651",
+            "10 VISITA TÉCNICA": "8001",
+          };
 
-        
-        for (let item of activeItems) {
-            let itemId = await item.getAttribute('id');
-            console.log(`Processing item with ID: ${itemId}`);
+          const getTagValue = (tag) => tagMap[tag] || null;
 
-            
-            await driver.executeScript("arguments[0].scrollIntoView(true);", item);
-            await driver.sleep(1000);
-            await driver.executeScript("arguments[0].click();", item);
-            await driver.sleep(1000);
-            let atendimentoContent = await item.findElement(By.css('.atendimento-item-content'));
-            let tagsContainerExists = await atendimentoContent.findElements(By.css('.tags-container.ng-scope'));
+          const tagValue = getTagValue(tagText);
+          console.log(tagText);
+          console.log(tagValue);
 
-            if (tagsContainerExists.length > 0) {
-                console.log(`tags-container found inside item ${itemId}`);
+          if (tagText.includes("RESOLVIDO")) {
+            console.log(
+              `Tag "RESOLVIDO" found for item ${itemId}. Finalizing...`
+            );
 
-                let tags = await atendimentoContent.findElements(By.css('.item-tag.ng-binding.ng-scope'));
-                for (let tag of tags) {
-                    let tagText = await tag.getText();
-                    tagText = tagText.trim();
+            let finalizeIcon = await driver.wait(
+              until.elementLocated(
+                By.css(".icone.no-mobile.i-finalizar.ng-scope")
+              ),
+              5000
+            );
+            await driver.executeScript(
+              "arguments[0].scrollIntoView(true);",
+              finalizeIcon
+            );
+            await finalizeIcon.click();
 
-                    if (tagText.includes("RESOLVIDO")) {
-                        console.log(`Tag "RESOLVIDO" found for item ${itemId}. Finalizing...`);
+            let selectElement = await driver.wait(
+              until.elementLocated(
+                By.css("select.form-control.select-simples")
+              ),
+              5000
+            );
 
-                        let finalizeIcon = await driver.wait(
-                            until.elementLocated(By.css('.icone.no-mobile.i-finalizar.ng-scope')),
-                            5000
-                        );
-                        await driver.executeScript("arguments[0].scrollIntoView(true);", finalizeIcon);
-                        await finalizeIcon.click();
+            let script = `"arguments[0].value = '${tagValue}';"`;
 
-                        let selectElement = await driver.wait(
-                            until.elementLocated(By.css('select.form-control.select-simples')),
-                            5000
-                        );
-                        await driver.executeScript("arguments[0].value = '7656';", selectElement);
-                        await driver.executeScript("arguments[0].dispatchEvent(new Event('change'));", selectElement);
+            await driver.executeScript(script, selectElement);
+            await driver.executeScript(
+              "arguments[0].dispatchEvent(new Event('change'));",
+              selectElement
+            );
 
-                        let finalizeButton = await driver.wait(
-                            until.elementLocated(By.css('[ng-click="onFinalizarAtendimento()"]')),
-                            5000
-                        );
-                        await finalizeButton.click();
-                        console.log(`Atendimento ${itemId} finalized.`);
-                    } else if (tagText.includes("SEM CONEXÃO")) {
-                        console.log(`Tag "SEM CONEXÃO" found for item ${itemId}. Transferring...`);
+            let finalizeButton = await driver.wait(
+              until.elementLocated(
+                By.css('[ng-click="onFinalizarAtendimento()"]')
+              ),
+              5000
+            );
+            await finalizeButton.click();
+            console.log(`Atendimento ${itemId} finalized.`);
+          } else if (tagText.includes("SEM CONEXÃO")) {
+            console.log(
+              `Tag "SEM CONEXÃO" found for item ${itemId}. Transferring...`
+            );
 
-                        let transferIcon = await driver.wait(
-                            until.elementLocated(By.css('.icone.no-mobile.i-transferir.ng-scope')),
-                            5000
-                        );
-                        await transferIcon.click();
+            let transferIcon = await driver.wait(
+              until.elementLocated(
+                By.css(".icone.no-mobile.i-transferir.ng-scope")
+              ),
+              5000
+            );
+            await transferIcon.click();
 
-                        let selecionaDep = await driver.wait(
-                            until.elementLocated(By.css('[ng-change="onSelecionarDepartamento()"]')),
-                            5000
-                        );
-                        await driver.executeScript("arguments[0].value = '34214';", selecionaDep);
-                        await driver.executeScript("arguments[0].dispatchEvent(new Event('change'));", selecionaDep);
+            let selecionaDep = await driver.wait(
+              until.elementLocated(
+                By.css('[ng-change="onSelecionarDepartamento()"]')
+              ),
+              5000
+            );
+            await driver.executeScript(
+              "arguments[0].value = '34214';",
+              selecionaDep
+            );
+            await driver.executeScript(
+              "arguments[0].dispatchEvent(new Event('change'));",
+              selecionaDep
+            );
 
-                        let select1 = await driver.wait(
-                            until.elementLocated(By.css('select[ng-model="departamentoSelecionado.atendenteId"]')),
-                            5000
-                        );
-                        await driver.executeScript("arguments[0].value = '0';", select1);
-                        await driver.executeScript("arguments[0].dispatchEvent(new Event('change'));", select1);
+            let select1 = await driver.wait(
+              until.elementLocated(
+                By.css('select[ng-model="departamentoSelecionado.atendenteId"]')
+              ),
+              5000
+            );
+            await driver.executeScript("arguments[0].value = '0';", select1);
+            await driver.executeScript(
+              "arguments[0].dispatchEvent(new Event('change'));",
+              select1
+            );
 
-                        let enviar = await driver.wait(until.elementLocated(By.css('[ng-click="onModalInserir()"]')));
-                        await enviar.click();
-                        console.log(`Atendimento ${itemId} transferred.`);
-                    }
-                }
-            }
+            let enviar = await driver.wait(
+              until.elementLocated(By.css('[ng-click="onModalInserir()"]'))
+            );
+            await enviar.click();
+            console.log(`Atendimento ${itemId} transferred.`);
+          }
         }
-
-    } catch (error) {
-        console.error('Error during checkAtendimentos process:', error);
-    } finally {
-        await driver.quit();
+      }
     }
+  } catch (error) {
+    console.error("Error during checkAtendimentos process:", error);
+  } finally {
+    await driver.quit();
+  }
 }
-const agendarTarde = schedule.scheduleJob('00 18 * * *', function() {
-    checkAtendimentos();
+const agendarTarde = schedule.scheduleJob("00 18 * * *", function () {
+  checkAtendimentos();
 });
 console.log("Agendado para as 18:00");
 
-const agendarNoite = schedule.scheduleJob('45 21 * * *', function() {
-    checkAtendimentos();
+const agendarNoite = schedule.scheduleJob("45 21 * * *", function () {
+  checkAtendimentos();
 });
 console.log("Agendado para as 21:45");
